@@ -58,6 +58,18 @@
           "id": "omarchy.tray"
         },
         {
+          "id": "petrzpav.mail"
+        },
+        {
+          "id": "petrzpav.slack"
+        },
+        {
+          "id": "omarchy.tailscale"
+        },
+        {
+          "id": "io.github.thisisgm.omapods"
+        },
+        {
           "exec": "~/.config/omarchy/plugins/petrzpav.alerts/bin/alerts-bar",
           "id": "alerts",
           "interval": 10,
@@ -91,11 +103,15 @@
       ]
     },
     "position": "bottom",
-    "transparent": true
+    "transparent": false
   },
   "plugins": [
     {
       "id": "george.dim"
     }
+  ],
+  "disabledPlugins": [
+    "omarchy.clipboard",
+    "omarchy.notifications"
   ]
 }

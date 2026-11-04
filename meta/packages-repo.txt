@@ -15,6 +15,7 @@ btop
 chromium
 clang
 cliamp
+cmake
 composer
 cups
 cups-filters
@@ -98,6 +99,7 @@ mpv-mpris
 nautilus
 nautilus-python
 networkmanager
+ninja
 noto-fonts
 noto-fonts-cjk
 noto-fonts-emoji
@@ -126,7 +128,9 @@ python-pillow
 python-poetry-core
 qemu-user-static-binfmt
 qrencode
+qt6-connectivity
 qt6-imageformats
+qt6-tools
 quickshell
 rbw
 ripgrep
@@ -140,6 +144,7 @@ starship
 sudo
 sushi
 system-config-printer
+tailscale
 tensaku
 tesseract
 tesseract-data-eng
@@ -157,6 +162,7 @@ udiskie
 ufw
 ufw-docker
 usage
+uv
 uwsm
 voxtype-bin
 vpl-gpu-rt

@@ -1,5 +1,103 @@
 [
   {
+    "plugin_id": "heeler",
+    "name": "heeler",
+    "version": "0.8.0",
+    "min_herdr_version": "0.7.5",
+    "description": "Pair a Heeler device by scanning a QR Pairing Code",
+    "manifest_path": "/home/george/.config/herdr/plugins/github/heeler-dd89d5c0f92b/plugin/herdr-plugin.toml",
+    "plugin_root": "/home/george/.config/herdr/plugins/github/heeler-dd89d5c0f92b/plugin",
+    "enabled": true,
+    "platforms": [
+      "linux",
+      "macos"
+    ],
+    "build": [
+      {
+        "command": [
+          "npm",
+          "ci"
+        ]
+      }
+    ],
+    "startup": [
+      {
+        "command": [
+          "node",
+          "src/sidebar-hook.js"
+        ]
+      }
+    ],
+    "actions": [
+      {
+        "id": "pair",
+        "title": "Pair a mobile device",
+        "description": "Show a Pairing Code QR for the Heeler app",
+        "contexts": [
+          "global"
+        ],
+        "command": [
+          "node",
+          "src/pair-action.js"
+        ]
+      },
+      {
+        "id": "usage-claude-limits",
+        "title": "Read Claude Code Usage Limits",
+        "description": "Used by Heeler: reads Claude Code's plan limits in herdr's session",
+        "contexts": [
+          "global"
+        ],
+        "platforms": [
+          "macos"
+        ],
+        "command": [
+          "node",
+          "src/usage-claude-action.js"
+        ]
+      }
+    ],
+    "events": [
+      {
+        "on": "pane.agent_status_changed",
+        "command": [
+          "node",
+          "src/activity-hook.js"
+        ]
+      },
+      {
+        "on": "pane.agent_status_changed",
+        "command": [
+          "node",
+          "src/notify-hook.js"
+        ]
+      }
+    ],
+    "panes": [
+      {
+        "id": "pair",
+        "title": "Pair device",
+        "placement": "popup",
+        "width": "100%",
+        "height": "100%",
+        "command": [
+          "node",
+          "src/pair-popup.js"
+        ]
+      }
+    ],
+    "source": {
+      "kind": "github",
+      "owner": "ZingerLittleBee",
+      "repo": "Heeler",
+      "subdir": "plugin",
+      "requested_ref": "main",
+      "resolved_commit": "711fac527770e0ed8276953e912414b0686def28",
+      "managed_path": "/home/george/.config/herdr/plugins/github/heeler-dd89d5c0f92b",
+      "installed_unix_ms": 1793805431333
+    }
+  },
+  {
     "plugin_id": "petrzpav.persistent-spaces",
     "name": "Persistent spaces",
     "version": "0.1.0",

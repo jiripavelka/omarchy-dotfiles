@@ -44,3 +44,14 @@ hl.unbind("switch:on:Lid Switch")
 hl.unbind("switch:off:Lid Switch")
 o.bind("switch:on:Lid Switch", nil, os.getenv("HOME") .. "/.local/bin/lid-switch close", { locked = true })
 o.bind("switch:off:Lid Switch", nil, os.getenv("HOME") .. "/.local/bin/lid-switch open", { locked = true })
+
+-- Switch keyboard layout with Left Alt + Right Alt (either order); Right Alt alone stays AltGr.
+o.bind("ALT + ISO_Level3_Shift", "Next keyboard layout", "hyprctl switchxkblayout all next")
+o.bind("MOD5 + Alt_L", "Next keyboard layout", "hyprctl switchxkblayout all next")
+
+-- Slack in the terminal (petrzpav.slack)
+o.bind("SUPER + SHIFT + K", "Slack", os.getenv("HOME") .. "/.local/bin/slack-window")
+
+-- Mail in the terminal (petrzpav.mail)
+hl.unbind("SUPER + SHIFT + E")
+o.bind("SUPER + SHIFT + E", "Mail", os.getenv("HOME") .. "/.local/bin/mail-window")

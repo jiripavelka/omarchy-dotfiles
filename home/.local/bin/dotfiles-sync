@@ -44,7 +44,8 @@ ETC_PATHS=(
   /etc/systemd/logind.conf.d/30-lid-ignore.conf
 )
 EXCLUDES=(--exclude='*.bak.*' --exclude='*.bak' --exclude='.git' --exclude='node_modules'
-  --exclude='*.log' --exclude='lazy-lock.json.bak' --exclude='private-patterns')
+  --exclude='*.log' --exclude='lazy-lock.json.bak' --exclude='private-patterns'
+  --exclude='*.sock' --exclude='herdr/plugins/github' --exclude='herdr/session.json')
 
 OUT="$REPO/home"
 rm -rf "$OUT" "$REPO/etc" "$REPO/meta"
@@ -98,6 +99,7 @@ pacman -Qqem | sort >"$REPO/meta/packages-aur.txt"
 systemctl --user list-unit-files --state=enabled --no-legend 2>/dev/null \
   | awk '{print $1}' | sort >"$REPO/meta/user-units-enabled.txt"
 omarchy default browser >"$REPO/meta/default-browser.txt" 2>/dev/null || true
+herdr plugin list 2>/dev/null | sed -n 's/.*\[github:\(.*\)\]$/\1/p' >"$REPO/meta/herdr-plugins-github.txt" || true
 
 # --- privacy checks ----------------------------------------------------------
 if hits=$(grep -rIilF -f "$PATTERNS" "$REPO/home" "$REPO/etc" "$REPO/meta" 2>/dev/null); then

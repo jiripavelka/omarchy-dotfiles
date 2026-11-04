@@ -7,7 +7,7 @@
 --   input = {
 --     -- Use multiple keyboard layouts and switch between them with Left Alt + Right Alt.
 --     kb_layout = "us,dk,eu",
---     kb_options = "compose:caps,shift:both_capslock_cancel,grp:alts_toggle",
+--     kb_options = "compose:caps,shift:both_capslock_cancel,lv3:ralt_switch",
 --
 --     -- Use a specific keyboard variant if needed (e.g. intl for international keyboards).
 --     kb_variant = "intl",
@@ -56,12 +56,13 @@
 -- hl.gesture({ fingers = 3, direction = "left", action = function() hl.dispatch(hl.dsp.focus({ direction = "l" })) end })
 -- hl.gesture({ fingers = 3, direction = "right", action = function() hl.dispatch(hl.dsp.focus({ direction = "r" })) end })
 
--- Personal: US + Czech QWERTZ, switch with Left Alt + Right Alt together.
+-- Personal: US + Czech QWERTZ. Right Alt is AltGr; Left Alt + Right Alt switches
+-- layout via a binding in bindings.lua (grp:alts_toggle would take AltGr away).
 hl.config({
   input = {
     kb_layout = "us,cz",
     kb_variant = ",",
-    kb_options = "compose:caps,shift:both_capslock_cancel,grp:alts_toggle",
+    kb_options = "compose:caps,shift:both_capslock_cancel,lv3:ralt_switch",
   },
 })
 
