@@ -47,6 +47,14 @@
       ],
       "right": [
         {
+          "id": "dotfiles",
+          "type": "command",
+          "exec": "~/.config/omarchy/bar/scripts/dotfiles-age",
+          "interval": 600,
+          "onClick": "omarchy-launch-floating-terminal-with-presentation ~/.local/bin/dotfiles-sync",
+          "tooltip": "Dotfiles backup"
+        },
+        {
           "id": "omarchy.tray"
         },
         {

@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# Bar module: icon only when the dotfiles backup failed or is older than 4 days.
+s="$HOME/.local/state/dotfiles"
+last=$(cat "$s/last-success" 2>/dev/null || echo 0)
+days=$(( ($(date +%s) - last) / 86400 ))
+if [[ -f $s/last-error ]]; then
+  jq -nc --arg e "$(cat "$s/last-error")" '{text: "󰊢 !", tooltip: ("Dotfiles backup failed: " + $e + " (click to retry)")}'
+elif (( days >= 4 )); then
+  if (( last == 0 )); then t="Dotfiles never backed up"; else t="Dotfiles last backed up $days days ago"; fi
+  jq -nc --arg t "$t (click to back up now)" '{text: "󰊢", tooltip: $t}'
+fi

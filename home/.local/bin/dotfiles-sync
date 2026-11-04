@@ -33,6 +33,7 @@ HOME_PATHS=(
   .config/omarchy/hooks
   .config/omarchy/themes
   .config/omarchy/branding
+  .config/omarchy/bar
   .config/alacritty .config/ghostty .config/kitty .config/foot
   .config/nvim .config/starship.toml .config/lazygit .config/btop .config/tmux
   .config/herdr .config/mise .config/environment.d .config/voxtype .config/autostart
