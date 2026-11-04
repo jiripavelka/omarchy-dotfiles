@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "id": "george.dim",
+  "name": "Dim and sleep displays",
+  "version": "1.0.0",
+  "author": "george",
+  "description": "Apple-style idle: dim all screens after 15 minutes, turn them off 30 seconds later. Never locks.",
+  "kinds": ["service"],
+  "keepLoaded": true,
+  "entryPoints": { "service": "Service.qml" }
+}

@@ -1,0 +1,134 @@
+#!/bin/bash
+# Back up personal Omarchy config to a public GitHub repo, once a day (dotfiles-sync.timer).
+#   dotfiles-sync            collect, check for private data, commit and push
+#   dotfiles-sync --dry-run  collect and check only; show what would be committed
+#
+# Only an explicit list of paths is copied. Nothing is pushed if a line of
+# ~/.config/dotfiles/private-patterns (local only, never committed) or a secret
+# found by gitleaks appears anywhere in the collected files.
+set -euo pipefail
+
+REPO="$HOME/.local/share/dotfiles"
+PATTERNS="$HOME/.config/dotfiles/private-patterns"
+STATE="$HOME/.local/state/dotfiles"
+DRY=0; [[ ${1:-} == --dry-run ]] && DRY=1
+
+mkdir -p "$STATE"
+
+fail() {
+  echo "dotfiles-sync: $1" >&2
+  echo "$1" >"$STATE/last-error"
+  notify-send -u critical -a Dotfiles "Dotfiles backup failed" "$1" 2>/dev/null || true
+  exit 1
+}
+
+[[ -d $REPO/.git ]] || fail "$REPO is not a git repository"
+[[ -s $PATTERNS ]] || fail "missing $PATTERNS (private strings that must never be pushed)"
+
+# --- what to back up (paths relative to $HOME) -------------------------------
+HOME_PATHS=(
+  .config/hypr
+  .config/omarchy/shell.json
+  .config/omarchy/extensions
+  .config/omarchy/hooks
+  .config/omarchy/themes
+  .config/omarchy/branding
+  .config/alacritty .config/ghostty .config/kitty .config/foot
+  .config/nvim .config/starship.toml .config/lazygit .config/btop .config/tmux
+  .config/herdr .config/mise .config/environment.d .config/voxtype .config/autostart
+  .config/systemd/user
+  .config/mimeapps.list .config/chrome-flags.conf .config/chromium-flags.conf
+)
+ETC_PATHS=(
+  /etc/systemd/logind.conf.d/30-lid-ignore.conf
+)
+EXCLUDES=(--exclude='*.bak.*' --exclude='*.bak' --exclude='.git' --exclude='node_modules'
+  --exclude='*.log' --exclude='lazy-lock.json.bak' --exclude='private-patterns')
+
+OUT="$REPO/home"
+rm -rf "$OUT" "$REPO/etc" "$REPO/meta"
+mkdir -p "$OUT" "$REPO/etc" "$REPO/meta"
+
+for p in "${HOME_PATHS[@]}"; do
+  [[ -e $HOME/$p ]] || continue
+  mkdir -p "$OUT/$(dirname "$p")"
+  rsync -a "${EXCLUDES[@]}" "$HOME/$p" "$OUT/$(dirname "$p")/"
+done
+
+# Shell plugins: ones installed from git are recorded by URL and reinstalled on
+# restore; the rest (own or copied ones) are backed up in full.
+: >"$REPO/meta/plugins-git.txt"
+for d in "$HOME"/.config/omarchy/plugins/*/; do
+  id=$(basename "$d")
+  if url=$(git -C "$d" remote get-url origin 2>/dev/null); then
+    echo "$id $url" >>"$REPO/meta/plugins-git.txt"
+  else
+    mkdir -p "$OUT/.config/omarchy/plugins"
+    rsync -a "${EXCLUDES[@]}" "$d" "$OUT/.config/omarchy/plugins/$id/"
+  fi
+done
+jq -r '.plugins[]?.id // empty' "$HOME/.config/omarchy/shell.json" >"$REPO/meta/plugins-enabled.txt" 2>/dev/null || true
+
+# Own scripts in ~/.local/bin (text only; downloaded binaries are skipped).
+mkdir -p "$OUT/.local/bin"
+for f in "$HOME"/.local/bin/*; do
+  [[ -f $f && ! -L $f ]] || continue
+  [[ $(file -b --mime-type "$f") == text/* ]] || continue
+  (( $(stat -c %s "$f") < 1048576 )) || continue
+  cp -p "$f" "$OUT/.local/bin/"
+done
+
+# Git config without the [user] section (name, e-mail).
+if [[ -f $HOME/.config/git/config ]]; then
+  mkdir -p "$OUT/.config/git"
+  cp "$HOME/.config/git/config" "$OUT/.config/git/config"
+  git config -f "$OUT/.config/git/config" --remove-section user 2>/dev/null || true
+fi
+
+for p in "${ETC_PATHS[@]}"; do
+  [[ -e $p ]] || continue
+  mkdir -p "$REPO/etc$(dirname "$p")"
+  cp "$p" "$REPO/etc$p"
+done
+
+# Package lists and a few settings that live outside files.
+pacman -Qqen | sort >"$REPO/meta/packages-repo.txt"
+pacman -Qqem | sort >"$REPO/meta/packages-aur.txt"
+systemctl --user list-unit-files --state=enabled --no-legend 2>/dev/null \
+  | awk '{print $1}' | sort >"$REPO/meta/user-units-enabled.txt"
+omarchy default browser >"$REPO/meta/default-browser.txt" 2>/dev/null || true
+
+# --- privacy checks ----------------------------------------------------------
+if hits=$(grep -rIilF -f "$PATTERNS" "$REPO/home" "$REPO/etc" "$REPO/meta" 2>/dev/null); then
+  fail "private data found, nothing pushed: ${hits//$REPO\//}"
+fi
+if command -v gitleaks >/dev/null; then
+  for d in home etc meta; do
+    gitleaks dir "$REPO/$d" --no-banner --redact --log-level error >"$STATE/gitleaks.txt" 2>&1 \
+      || fail "gitleaks found a possible secret in $d/, nothing pushed (see $STATE/gitleaks.txt)"
+  done
+else
+  fail "gitleaks is not installed (omarchy pkg add gitleaks)"
+fi
+
+cd "$REPO"
+git add -A
+if (( DRY )); then
+  git status --short
+  echo "dry run: checks passed, nothing committed"
+  exit 0
+fi
+
+if ! git diff --cached --quiet; then
+  git commit -q -m "Sync $(date +%F)"
+fi
+
+# Network may not be up yet right after boot.
+for _ in {1..12}; do
+  git ls-remote -q origin >/dev/null 2>&1 && break
+  sleep 10
+done
+git push -q origin HEAD 2>"$STATE/push.txt" || fail "git push failed: $(tail -1 "$STATE/push.txt")"
+
+rm -f "$STATE/last-error"
+date +%s >"$STATE/last-success"

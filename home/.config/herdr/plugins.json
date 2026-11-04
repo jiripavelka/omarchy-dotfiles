@@ -1,0 +1,129 @@
+[
+  {
+    "plugin_id": "petrzpav.persistent-spaces",
+    "name": "Persistent spaces",
+    "version": "0.1.0",
+    "min_herdr_version": "0.8.0",
+    "description": "Spaces survive closing their last tab or pane; only the delete action removes one",
+    "manifest_path": "/home/george/.config/herdr/local-plugins/persistent-spaces/herdr-plugin.toml",
+    "plugin_root": "/home/george/.config/herdr/local-plugins/persistent-spaces",
+    "enabled": true,
+    "platforms": [
+      "linux",
+      "macos"
+    ],
+    "startup": [
+      {
+        "command": [
+          "python3",
+          "-I",
+          "spaces.py",
+          "remember"
+        ]
+      }
+    ],
+    "actions": [
+      {
+        "id": "delete",
+        "title": "Delete space",
+        "description": "Close the current space for good",
+        "contexts": [
+          "workspace",
+          "global"
+        ],
+        "command": [
+          "python3",
+          "-I",
+          "spaces.py",
+          "delete"
+        ]
+      }
+    ],
+    "events": [
+      {
+        "on": "pane.closed",
+        "command": [
+          "python3",
+          "-I",
+          "spaces.py",
+          "closed"
+        ]
+      },
+      {
+        "on": "pane.exited",
+        "command": [
+          "python3",
+          "-I",
+          "spaces.py",
+          "closed"
+        ]
+      },
+      {
+        "on": "tab.closed",
+        "command": [
+          "python3",
+          "-I",
+          "spaces.py",
+          "closed"
+        ]
+      },
+      {
+        "on": "workspace.closed",
+        "command": [
+          "python3",
+          "-I",
+          "spaces.py",
+          "closed"
+        ]
+      },
+      {
+        "on": "workspace.created",
+        "command": [
+          "python3",
+          "-I",
+          "spaces.py",
+          "remember"
+        ]
+      },
+      {
+        "on": "workspace.focused",
+        "command": [
+          "python3",
+          "-I",
+          "spaces.py",
+          "remember"
+        ]
+      },
+      {
+        "on": "workspace.moved",
+        "command": [
+          "python3",
+          "-I",
+          "spaces.py",
+          "remember"
+        ]
+      },
+      {
+        "on": "workspace.renamed",
+        "command": [
+          "python3",
+          "-I",
+          "spaces.py",
+          "remember"
+        ]
+      },
+      {
+        "on": "workspace.reordered",
+        "command": [
+          "python3",
+          "-I",
+          "spaces.py",
+          "remember"
+        ]
+      }
+    ],
+    "source": {
+      "kind": "local"
+    }
+  }
+]

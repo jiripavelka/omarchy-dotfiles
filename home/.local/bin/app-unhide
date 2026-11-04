@@ -1,0 +1,152 @@
+#!/bin/bash
+#
+# app-unhide - bring a window hidden by app-hide (SUPER+W) back where it was: its workspace,
+# its tiled slot (next to the same neighbour, on the same side) or its floating geometry,
+# and focus it. Without a remembered place it comes to the current workspace.
+#
+#   app-unhide                  pick one of the hidden windows (SUPER+ALT+W)
+#   app-unhide --last           the window hidden last (SUPER+Z)
+#   app-unhide --address <a>    that window (hypr/team.lua runs it when a hidden one gets focus)
+#   app-unhide --browser        the default browser's window hidden last, or a new browser
+#                               window when none is hidden (SUPER+SHIFT+B)
+#   app-unhide --webapp <url>   that web app's window hidden last, or the web app opened anew
+#                               when none is hidden (Omarchy's web app keys, e.g. SUPER+SHIFT+X)
+#   app-unhide <class>          the hidden window of that class; exits 1 if none is hidden
+
+state="${XDG_RUNTIME_DIR:-/tmp}/app-hide"
+d() { hyprctl dispatch "$1" >/dev/null; }
+
+# One at a time: a launcher focusing a hidden window can fire the focus hook twice, and a
+# second run racing the first would drop the window next to whatever has focus. Whoever
+# waited sees the window already back and stops.
+mkdir -p "$state"
+lock() { exec 9>"$state/.lock" && flock 9; clients=$(hyprctl clients -j); }
+[[ -z ${1:-} ]] || lock # the picker locks once something is picked
+clients=${clients:-$(hyprctl clients -j)}
+hidden() { jq -r "[.[] | select(.workspace.name == \"special:hidden\") | $1]" <<<"$clients"; }
+
+# The hidden window (of a class matching the regex, any case) that was hidden last.
+last_hidden() {
+  local f a candidates
+  candidates=$(hidden "select(.class | test(\"${1:-.}\"; \"i\")) | .address")
+  for f in $(ls -t "$state"/*.json 2>/dev/null); do
+    a=$(basename "$f" .json)
+    jq -e --arg a "$a" 'index($a)' <<<"$candidates" >/dev/null && { echo "$a"; return; }
+  done
+  jq -r '.[0] // empty' <<<"$candidates" # hidden without a remembered place
+}
+
+case "${1:-}" in
+--address) addr=$2 ;;
+--last) addr=$(last_hidden) ;;
+--browser)
+  # Find the browser's windows the way omarchy-launch-browser does: by its program name.
+  desktop=$(env -u BROWSER xdg-settings get default-web-browser 2>/dev/null)
+  [[ -n $desktop ]] || desktop=$(xdg-mime query default x-scheme-handler/https)
+  exe=$(sed -n 's/^Exec=\([^ ]*\).*/\1/p' {~/.local,~/.nix-profile,/usr}/share/applications/"$desktop" 2>/dev/null | head -1)
+  addr=$(last_hidden "^$(basename "${exe:-browser}" -stable)")
+  [[ -n $addr ]] || exec omarchy-launch-browser 9>&-
+  ;;
+--webapp)
+  # A web app's window class is the browser, host and path: https://x.com/compose/post
+  # opens as chrome-x.com__compose_post-Default (brave-…, google-chrome-… alike).
+  url=${2#*://}; url=${url%%[?#]*}
+  host=${url%%/*}; path=${url#"$host"}
+  key="${host}_${path:-/}"; key=${key//\//_}
+  addr=$(last_hidden "-${key//./[.]}-[^-]+\$")
+  [[ -n $addr ]] || exec omarchy-launch-webapp "$2" 9>&-
+  ;;
+"")
+  rows=$(hidden '"󰖯\t\(.title[:70])\t\(.class)  \(.address)"' | jq -r '.[]')
+  [[ -n $rows ]] || { notify-send -t 2000 "No hidden windows"; exit 0; }
+  pick=$(omarchy-menu-select 'Hidden windows' -- --width 700 <<<"$rows") || exit 0
+  addr=${pick##* }
+  lock
+  ;;
+*)
+  addr=$(last_hidden "^$1\$")
+  [[ -n $addr ]] || exit 1
+  ;;
+esac
+[[ -n $addr ]] && jq -e --arg a "$addr" 'any(.[]; .address == $a and .workspace.name == "special:hidden")' \
+  <<<"$clients" >/dev/null || exit 0
+
+# Focusing a hidden window from elsewhere opens the hidden workspace on top; close it.
+hyprctl monitors -j | jq -e 'any(.[]; .specialWorkspace.name == "special:hidden")' >/dev/null &&
+  d 'hl.dsp.workspace.toggle_special("hidden")'
+
+saved=$(cat "$state/$addr.json" 2>/dev/null)
+rm -f "$state/$addr.json"
+ws=$(jq -r '.workspace // empty' <<<"$saved")
+[[ -n $ws && $ws != -* ]] || ws=$(hyprctl activeworkspace -j | jq -r .id)
+
+d "hl.dsp.focus({ workspace = \"$ws\" })"
+
+if [[ $(jq -r '.floating // false' <<<"$saved") == true ]]; then
+  read -r x y w h < <(jq -r '"\(.at[0]) \(.at[1]) \(.size[0]) \(.size[1])"' <<<"$saved")
+  d "hl.dsp.window.move({ workspace = \"$ws\", window = \"address:$addr\" })"
+  d "hl.dsp.window.resize({ x = $w, y = $h, window = \"address:$addr\" })"
+  d "hl.dsp.window.move({ x = $x, y = $y, window = \"address:$addr\" })"
+  exit 0
+fi
+
+read -r neighbour side stack < <(jq -r '.neighbour // empty | "\(.address) \(.side) \(.stack)"' <<<"$saved")
+if [[ -z $neighbour ]] || ! jq -e --arg a "$neighbour" --argjson ws "$ws" \
+  'any(.[]; .address == $a and .workspace.id == $ws)' <<<"$clients" >/dev/null; then
+  d "hl.dsp.window.move({ workspace = \"$ws\", window = \"address:$addr\" })"
+  exit 0
+fi
+
+d "hl.dsp.focus({ window = \"address:$neighbour\" })"
+
+# The scrolling layout ignores preselect: a window moved in always lands in a new column to
+# the right of the focused one. Shift its column left, or move it into the neighbour's column
+# and up, until it sits on the remembered side.
+layout=$(hyprctl workspaces -j | jq -r --argjson ws "$ws" '.[] | select(.id == $ws) | .tiledLayout')
+if [[ $layout == scrolling ]]; then
+  d "hl.dsp.window.move({ workspace = \"$ws\", window = \"address:$addr\" })"
+  d "hl.dsp.focus({ window = \"address:$addr\" })"
+  case $side in
+  l) d 'hl.dsp.layout("swapcol l")' ;;
+  u | d)
+    d 'hl.dsp.window.move({ direction = "l" })' # joins the neighbour's column at the bottom
+    for _ in 1 2 3 4 5 6; do # up to right above (u) or right below (d) the neighbour
+      hyprctl clients -j | jq -e --arg a "$addr" --arg n "$neighbour" --arg side "$side" '
+        (.[] | select(.address == $a)) as $w | (.[] | select(.address == $n)) as $n
+        | if $side == "u" then $w.at[1] < $n.at[1] else $w.at[1] - ($n.at[1] + $n.size[1]) < 50 end' \
+        >/dev/null && break
+      d 'hl.dsp.window.swap({ direction = "u" })'
+    done
+    ;;
+  esac
+  exit 0
+fi
+
+d "hl.dsp.layout(\"preselect $side\")"
+d "hl.dsp.window.move({ workspace = \"$ws\", window = \"address:$addr\" })"
+[[ $stack == true ]] || exit 0
+
+# Next to a stack: make the window one half of the workspace and try the split's other side
+# and orientation until it is back in place, then turn back any split in the stack that
+# moving it flipped. Windows opened or closed since hiding are left as they are.
+fits() { # <address>: is the window where it was when hidden?
+  hyprctl clients -j | jq -e --arg a "$1" --argjson s "$saved" '
+    ($s.layout[] | select(.address == $a)) as $o
+    | .[] | select(.address == $a)
+    | [.at[0] - $o.at[0], .at[1] - $o.at[1], .size[0] - $o.size[0], .size[1] - $o.size[1]]
+    | all(fabs <= 2)' >/dev/null
+}
+d 'hl.dsp.layout("movetoroot")'
+for fix in swapsplit togglesplit swapsplit; do
+  fits "$addr" && break
+  d "hl.dsp.layout(\"$fix\")"
+done
+for other in $(jq -r --arg a "$addr" '.layout[] | select(.address != $a) | .address' <<<"$saved"); do
+  fits "$other" && continue
+  d "hl.dsp.focus({ window = \"address:$other\" })"
+  for fix in togglesplit swapsplit togglesplit swapsplit; do # all four states, back to start
+    d "hl.dsp.layout(\"$fix\")"
+    fits "$other" && break
+  done
+done
+d "hl.dsp.focus({ window = \"address:$addr\" })"

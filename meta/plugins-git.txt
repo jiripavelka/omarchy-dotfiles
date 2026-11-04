@@ -1,0 +1,2 @@
+njpatel.omapager https://github.com/njpatel/omapager.git
+petrzpav.wallswap https://github.com/petrzpav/omarchy-wallswap.git

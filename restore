@@ -1,0 +1,66 @@
+#!/bin/bash
+# Restore this personal Omarchy config onto a fresh Omarchy install.
+#   ./restore            restore everything
+#   ./restore --dry-run  only show what would change
+#
+# Order on a new machine: install Omarchy, run the shared omarchy-setup
+# bootstrap (if used), clone this repo to ~/.local/share/dotfiles, run ./restore.
+# Existing files are backed up next to the original as <name>.bak.<timestamp>.
+set -euo pipefail
+
+cd "$(dirname "$(readlink -f "$0")")"
+DRY=0; [[ ${1:-} == --dry-run ]] && DRY=1
+TS=$(date +%s)
+run() { if (( DRY )); then echo "would run: $*"; else "$@"; fi; }
+
+echo "== Packages"
+missing_repo=$(comm -23 meta/packages-repo.txt <(pacman -Qqn | sort))
+missing_aur=$(comm -23 meta/packages-aur.txt <(pacman -Qqm | sort))
+# shellcheck disable=SC2086
+[[ -z $missing_repo ]] || run omarchy pkg add $missing_repo || echo "some repo packages failed, continuing"
+# shellcheck disable=SC2086
+[[ -z $missing_aur ]] || run omarchy pkg aur add $missing_aur || echo "some AUR packages failed, continuing"
+
+echo "== Shell plugins from git"
+while read -r id url; do
+  [[ -n ${id:-} ]] || continue
+  [[ -d $HOME/.config/omarchy/plugins/$id ]] && { echo "  $id already installed"; continue; }
+  run omarchy plugin add "$url" --yes || echo "  failed: $url"
+done <meta/plugins-git.txt
+
+echo "== Files in ~"
+rsync_opts=(-a --itemize-changes --backup --suffix=".bak.$TS")
+(( DRY )) && rsync_opts+=(--dry-run)
+rsync "${rsync_opts[@]}" home/ "$HOME/" | grep -v '^\.' || true
+
+echo "== System files (sudo)"
+if [[ -d etc ]] && [[ -n $(find etc -type f) ]]; then
+  while IFS= read -r f; do
+    target="/${f}"
+    if cmp -s "$f" "$target"; then echo "  $target unchanged"; continue; fi
+    run sudo install -D -m 644 "$f" "$target"
+  done < <(find etc -type f)
+  echo "  logind changes: sudo systemctl reload systemd-logind (or reboot)"
+fi
+
+echo "== Enabled plugins, user services, browser"
+while read -r id; do [[ -n $id ]] && run omarchy plugin enable "$id" >/dev/null || true; done <meta/plugins-enabled.txt
+run systemctl --user daemon-reload
+while read -r unit; do
+  [[ -f $HOME/.config/systemd/user/$unit || -f /usr/lib/systemd/user/$unit ]] || continue
+  run systemctl --user enable "$unit" >/dev/null 2>&1 || true
+done <meta/user-units-enabled.txt
+[[ -s meta/default-browser.txt ]] && run omarchy default browser "$(cat meta/default-browser.txt)" || true
+
+if (( ! DRY )); then
+  hyprctl reload >/dev/null && hyprctl configerrors
+  omarchy restart shell >/dev/null 2>&1 || true
+fi
+
+cat <<'EOF'
+
+Done. Not restored on purpose (private, set these by hand):
+  - git identity:   git config --global user.name / user.email
+  - gh login, SSH keys, password vault (rbw login), backup passwords
+  - monitors.lua / input.lua may need adjusting to the new hardware
+EOF

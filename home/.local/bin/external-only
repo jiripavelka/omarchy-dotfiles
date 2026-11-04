@@ -1,0 +1,28 @@
+#!/bin/bash
+# Turn the laptop panel off whenever an external monitor is active, lid open or
+# closed. Omarchy turns it back on by itself once the external one is gone
+# (omarchy-hyprland-monitor-watch -> omarchy-hyprland-monitor-internal recover).
+
+SOCKET="$XDG_RUNTIME_DIR/hypr/$HYPRLAND_INSTANCE_SIGNATURE/.socket2.sock"
+
+sync() {
+  omarchy-hyprland-monitor-laptop >/dev/null 2>&1 || return 0
+  if omarchy-hyprland-monitor-external-active; then
+    # No-op (and no notification) when the panel is already off.
+    omarchy-hyprland-monitor-internal off >/dev/null 2>&1 || true
+  fi
+}
+
+# The new output may need a moment before Hyprland reports it as enabled.
+sync_soon() {
+  sync
+  ( for delay in 1 3; do sleep "$delay"; sync; done ) &
+}
+
+sync_soon
+
+while read -r event; do
+  case "$event" in
+    monitoradded\>\>* | monitoraddedv2\>\>*) sync_soon ;;
+  esac
+done < <(socat -U - "UNIX-CONNECT:$SOCKET")
