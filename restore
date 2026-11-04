@@ -28,6 +28,15 @@ while read -r id url; do
   run omarchy plugin add "$url" --yes || echo "  failed: $url"
 done <meta/plugins-git.txt
 
+echo "== herdr plugins from GitHub"
+if [[ -f meta/herdr-plugins-github.txt ]] && command -v herdr >/dev/null; then
+  while read -r spec; do
+    [[ -n $spec ]] || continue
+    src=${spec%@*}; ref=${spec##*@}
+    run herdr plugin install "$src" --ref "$ref" --yes || echo "  failed: $spec"
+  done <meta/herdr-plugins-github.txt
+fi
+
 echo "== Files in ~"
 rsync_opts=(-a --itemize-changes --backup --suffix=".bak.$TS")
 (( DRY )) && rsync_opts+=(--dry-run)
