@@ -11,6 +11,7 @@ set -euo pipefail
 REPO="$HOME/.local/share/dotfiles"
 PATTERNS="$HOME/.config/dotfiles/private-patterns"
 STATE="$HOME/.local/state/dotfiles"
+NOTIFY_ID="$STATE/notify-id"
 DRY=0; [[ ${1:-} == --dry-run ]] && DRY=1
 
 mkdir -p "$STATE"
@@ -18,7 +19,11 @@ mkdir -p "$STATE"
 fail() {
   echo "dotfiles-sync: $1" >&2
   echo "$1" >"$STATE/last-error"
-  notify-send -u critical -a Dotfiles "Dotfiles backup failed" "$1" 2>/dev/null || true
+  # Replace the previous failure toast instead of stacking another one; the id
+  # lets a later successful run take the (sticky, critical) toast down again.
+  local id
+  id=$(notify-send -p -r "$(cat "$NOTIFY_ID" 2>/dev/null || echo 0)" -u critical -a Dotfiles \
+    "Dotfiles backup failed" "$1" 2>/dev/null) && echo "$id" >"$NOTIFY_ID" || true
   exit 1
 }
 
@@ -135,3 +140,10 @@ git push -q origin HEAD 2>"$STATE/push.txt" || fail "git push failed: $(tail -1 
 
 rm -f "$STATE/last-error"
 date +%s >"$STATE/last-success"
+
+# Critical toasts stay until dismissed, and the shell keeps them even when the
+# sender closes them, so replace the failure toast with a short-lived one.
+if [[ -s $NOTIFY_ID ]]; then
+  notify-send -r "$(cat "$NOTIFY_ID")" -u low -t 4000 -a Dotfiles "Dotfiles backed up" 2>/dev/null || true
+  rm -f "$NOTIFY_ID"
+fi
